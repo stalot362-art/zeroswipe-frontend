@@ -3,7 +3,7 @@ const API_BASE   = "https://zeroswipe-backend.onrender.com";
 const SOCKET_URL = "https://zeroswipe-backend.onrender.com";
 
 // Replace with your actual Paystack public key
-const PAYSTACK_KEY = "pk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+const PAYSTACK_KEY = "pk_test_9c2f196e59c2005240508904c30b324a8ceb44cb";
 
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
