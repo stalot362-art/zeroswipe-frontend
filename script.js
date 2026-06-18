@@ -1,9 +1,13 @@
 const BACKEND_URL = "https://rindera-backend.onrender.com";
+const SUPABASE_URL = "https://czmojquewgsrfafkjejy.supabase.co";
 
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6bW9qcXVld2dzcmZhZmtqZWp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MzUyOTYsImV4cCI6MjA5NzMxMTI5Nn0.dMSTEQ84ns74_OpKxapw3mds4DCG2JUAmndV_cawO2Q";
+
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const socket = io(BACKEND_URL);
 
-let currentUserId = null;
-let currentName = null;
+let currentUserId = localStorage.getItem("rinderaUserId");
+let currentName = localStorage.getItem("rinderaName");
 let currentMatchId = null;
 let currentRequestType = null;
 let pendingScheduleTime = null;
@@ -29,8 +33,7 @@ const statusBox = document.getElementById("status-box");
 function showStatus(message) {
   statusBox.innerText = message;
 }
-
-registerBtn.onclick = () => {
+registerBtn.onclick = async () => {
   const name = nameInput.value.trim();
 
   if (!name) {
@@ -39,12 +42,35 @@ registerBtn.onclick = () => {
   }
 
   currentName = name;
-  currentUserId = "user_" + Date.now();
+
+  if (!currentUserId) {
+    currentUserId = "user_" + Date.now();
+    localStorage.setItem("rinderaUserId", currentUserId);
+  }
+
+  localStorage.setItem("rinderaName", currentName);
+
+  const { error } = await supabaseClient
+    .from("users")
+    .upsert({
+      id: currentUserId,
+      name: currentName
+    });
+
+  if (error) {
+    showStatus("Could not save user.");
+    console.log(error);
+    return;
+  }
 
   socket.emit("register-user", {
     userId: currentUserId,
     name: currentName
   });
+
+  showStatus("User saved and connected.");
+};
+
 
   showStatus("Connecting...");
 };
@@ -178,4 +204,18 @@ socket.on("scheduled-date-confirmed", (data) => {
 
 socket.on("error-message", (message) => {
   showStatus(message);
+});
+
+window.addEventListener("load", () => {
+  if (currentUserId && currentName) {
+    nameInput.value = currentName;
+
+    socket.emit("register-user", {
+      userId: currentUserId,
+      name: currentName
+    });
+
+    findMatchBtn.disabled = false;
+    showStatus("Welcome back, " + currentName + ".");
+  }
 });
