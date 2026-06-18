@@ -124,15 +124,30 @@ acceptRequestBtn.onclick = () => {
 };
 
 socket.on("connect", () => {
-  showStatus("Connected to Rindera backend.");
+  if (!currentStatus || currentStatus === "idle") {
+    showStatus("Connected to Rindera backend.");
+  }
 });
 
 socket.on("registered", (user) => {
-  showStatus(`Welcome, ${user.name}.`);
   findMatchBtn.disabled = false;
+
+  if (currentStatus === "waiting") {
+    showStatus("Waiting for another user...");
+  } else if (currentStatus === "matched" && currentMatchId) {
+    matchTitle.innerText = "Match found";
+    matchActions.classList.remove("hidden");
+    showStatus("You are still matched.");
+  } else {
+    showStatus(`Welcome, ${user.name}.`);
+  }
 });
 
 socket.on("user-status-updated", (data) => {
+  if (data.status === "offline" || data.status === "online") {
+    return;
+  }
+
   currentStatus = data.status;
   localStorage.setItem("rinderaStatus", currentStatus);
 
@@ -217,6 +232,7 @@ window.addEventListener("load", () => {
     if (currentStatus === "waiting") {
       showStatus("Waiting for another user...");
     } else if (currentStatus === "matched" && currentMatchId) {
+      matchTitle.innerText = "Match found";
       matchActions.classList.remove("hidden");
       showStatus("You are still matched.");
     } else {
