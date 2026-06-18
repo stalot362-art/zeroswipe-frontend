@@ -1,372 +1,181 @@
-// ── Config ────────────────────────────────────────────────────────────────────
-const API_BASE   = "https://zeroswipe-backend.onrender.com";
-const SOCKET_URL = "https://zeroswipe-backend.onrender.com";
+const BACKEND_URL = "https://rindera-backend.onrender.com";
 
-// Replace with your actual Paystack public key
-const PAYSTACK_KEY = "pk_test_9c2f196e59c2005240508904c30b324a8ceb44cb";
+const socket = io(BACKEND_URL);
 
-const ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-];
+let currentUserId = null;
+let currentName = null;
+let currentMatchId = null;
+let currentRequestType = null;
+let pendingScheduleTime = null;
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let userId      = "";
-let loading     = null;
-let callState   = "idle";  // idle | joining | waiting | connected | error
-let callStatus  = "";
-let payRequired = false;
-let isSearching = false;
+const nameInput = document.getElementById("name-input");
+const registerBtn = document.getElementById("register-btn");
+const findMatchBtn = document.getElementById("find-match-btn");
 
-// ── Refs ──────────────────────────────────────────────────────────────────────
-let localStream  = null;
-let pc           = null;
-let rtcSocket    = null;
-let matchSocket  = null;
-let roomId       = "";
+const matchActions = document.getElementById("match-actions");
+const matchTitle = document.getElementById("match-title");
 
-// ── DOM helpers ───────────────────────────────────────────────────────────────
-const $ = (id) => document.getElementById(id);
+const videoDateBtn = document.getElementById("video-date-btn");
+const gameDateBtn = document.getElementById("game-date-btn");
+const scheduleInput = document.getElementById("schedule-input");
+const scheduleDateBtn = document.getElementById("schedule-date-btn");
 
-// ── Stop matching socket ──────────────────────────────────────────────────────
-function stopMatching() {
-  if (matchSocket) { matchSocket.disconnect(); matchSocket = null; }
-  isSearching = false;
-  loading     = null;
-  render();
+const requestBox = document.getElementById("request-box");
+const requestText = document.getElementById("request-text");
+const acceptRequestBtn = document.getElementById("accept-request-btn");
+
+const statusBox = document.getElementById("status-box");
+
+function showStatus(message) {
+  statusBox.innerText = message;
 }
 
-// ── Tear down call ────────────────────────────────────────────────────────────
-function cleanup() {
-  stopMatching();
-  if (localStream)  { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-  if (pc)           { pc.close(); pc = null; }
-  if (rtcSocket)    { rtcSocket.disconnect(); rtcSocket = null; }
-  $("local-video").srcObject  = null;
-  $("remote-video").srcObject = null;
-  callState  = "idle";
-  callStatus = "";
-  render();
-}
+registerBtn.onclick = () => {
+  const name = nameInput.value.trim();
 
-// ── WebRTC peer connection ────────────────────────────────────────────────────
-function createPeerConnection(socket) {
-  const conn = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-
-  conn.onicecandidate = (e) => {
-    if (e.candidate) socket.emit("ice-candidate", { roomId, candidate: e.candidate });
-  };
-
-  conn.ontrack = (e) => {
-    if (e.streams[0]) {
-      $("remote-video").srcObject = e.streams[0];
-      callState  = "connected";
-      callStatus = "Connected";
-      render();
-    }
-  };
-
-  conn.onconnectionstatechange = () => {
-    if (conn.connectionState === "disconnected" || conn.connectionState === "failed") {
-      callStatus = "Partner disconnected";
-      $("remote-video").srcObject = null;
-      render();
-    }
-  };
-
-  if (localStream) localStream.getTracks().forEach(t => conn.addTrack(t, localStream));
-  return conn;
-}
-
-// ── Join video call (WebRTC signalling) ───────────────────────────────────────
-async function joinCall(rid) {
-  callState  = "joining";
-  callStatus = "Requesting camera…";
-  render();
-
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: true });
-    $("local-video").srcObject = localStream;
-  } catch {
-    callState  = "error";
-    callStatus = "Camera / mic access denied";
-    render();
+  if (!name) {
+    showStatus("Enter your name first.");
     return;
   }
 
-  roomId = rid;
-  const socket = io(SOCKET_URL, { transports: ["websocket"] });
-  rtcSocket = socket;
+  currentName = name;
+  currentUserId = "user_" + Date.now();
 
-  socket.on("connect", () => {
-    callStatus = "Joining room…";
-    render();
-    socket.emit("join-room", roomId);
+  socket.emit("register-user", {
+    userId: currentUserId,
+    name: currentName
   });
 
-  socket.on("connect_error", () => {
-    callState  = "error";
-    callStatus = "Could not reach signaling server";
-    render();
+  showStatus("Connecting...");
+};
+
+findMatchBtn.onclick = () => {
+  socket.emit("find-match", {
+    userId: currentUserId
   });
 
-  socket.on("waiting", () => {
-    callState  = "waiting";
-    callStatus = "Waiting for partner to connect…";
-    render();
+  showStatus("Searching for match...");
+};
+
+videoDateBtn.onclick = () => {
+  socket.emit("request-video-date", {
+    matchId: currentMatchId,
+    fromUserId: currentUserId
   });
 
-  socket.on("user-joined", async () => {
-    callStatus = "Partner joined — connecting…";
-    render();
-    if (pc) pc.close();
-    pc = createPeerConnection(socket);
-    try {
-      const offer = await pc.createOffer({ offerToReceiveVideo: true, offerToReceiveAudio: true });
-      await pc.setLocalDescription(offer);
-      socket.emit("offer", { roomId, offer });
-    } catch (e) { console.error("offer error:", e); }
+  showStatus("Video date request sent.");
+};
+
+gameDateBtn.onclick = () => {
+  socket.emit("request-game-date", {
+    matchId: currentMatchId,
+    fromUserId: currentUserId
   });
 
-  socket.on("offer", async (data) => {
-    callStatus = "Received offer — answering…";
-    render();
-    if (pc) pc.close();
-    pc = createPeerConnection(socket);
-    try {
-      await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit("answer", { roomId, answer });
-    } catch (e) { console.error("answer error:", e); }
+  showStatus("Game date request sent.");
+};
+
+scheduleDateBtn.onclick = () => {
+  const dateTime = scheduleInput.value;
+
+  if (!dateTime) {
+    showStatus("Choose a date and time first.");
+    return;
+  }
+
+  socket.emit("request-scheduled-date", {
+    matchId: currentMatchId,
+    fromUserId: currentUserId,
+    dateTime
   });
 
-  socket.on("answer", async (data) => {
-    try { await pc?.setRemoteDescription(new RTCSessionDescription(data.answer)); }
-    catch (e) { console.error("setRemoteDescription error:", e); }
-  });
+  showStatus("Scheduled date request sent.");
+};
 
-  socket.on("ice-candidate", async (data) => {
-    try {
-      if (pc?.remoteDescription) await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-    } catch { /* stale */ }
-  });
-
-  socket.on("user-left", () => {
-    callStatus = "Partner left the call";
-    $("remote-video").srcObject = null;
-    render();
-  });
-
-  render();
-}
-
-// ── Real-time matching via socket.io ──────────────────────────────────────────
-function handleGetMatch() {
-  userId = $("user-id-input").value.trim();
-  if (!userId) { showStatus("error", "Please enter a User ID first."); return; }
-
-  loading     = "match";
-  isSearching = true;
-  payRequired = false;
-  showStatus("info", "Looking for a match…");
-  render();
-
-  const socket = io(SOCKET_URL, { transports: ["websocket"] });
-  matchSocket  = socket;
-
-  socket.on("connect", () => {
-    socket.emit("find-match", userId);
-  });
-
-  socket.on("connect_error", () => {
-    stopMatching();
-    showStatus("error", "Could not reach server. Please try again.");
-  });
-
-  socket.on("waiting", () => {
-    showStatus("info", "Waiting for a match…");
-  });
-
-  socket.on("match-found", async ({ roomId: rid }) => {
-    stopMatching();
-    showStatus("success", "Match found! Connecting you now…");
-    await joinCall(rid);
-  });
-
-  socket.on("payment-required", () => {
-    stopMatching();
-    payRequired = true;
-    showStatus("info", "Please pay $1 to continue.");
-    render();
-  });
-}
-
-function handleCancelSearch() {
-  stopMatching();
-  showStatus("info", "Search cancelled.");
-}
-
-// ── Unmatch ───────────────────────────────────────────────────────────────────
-async function handleUnmatch() {
-  userId = $("user-id-input").value.trim();
-  if (!userId) { showStatus("error", "Please enter a User ID first."); return; }
-
-  loading = "unmatch";
-  hideStatus();
-  cleanup();
-  render();
-
-  try { await axios.post(`${API_BASE}/unmatch`, { userId }); }
-  catch { /* proceed anyway */ }
-
-  loading     = null;
-  payRequired = true;
-  showStatus("info", "You unmatched. Pay $1 to continue.");
-  render();
-}
-
-// ── Payment ───────────────────────────────────────────────────────────────────
-async function notifyBackendPay(reference) {
-  try {
-    const res  = await fetch(`${API_BASE}/pay`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, reference }),
+acceptRequestBtn.onclick = () => {
+  if (currentRequestType === "video") {
+    socket.emit("accept-video-date", {
+      matchId: currentMatchId
     });
-    const data = await res.json().catch(() => null);
-    const msg  = typeof data === "string" ? data : (data?.message ?? data?.msg ?? null);
-    showStatus("success", msg ?? "Payment successful.");
-    payRequired = false;
-  } catch {
-    showStatus("error", "Payment confirmed but server update failed.");
-  } finally {
-    loading = null;
-    render();
-  }
-}
-
-function handlePay() {
-  userId = $("user-id-input").value.trim();
-  if (!userId) { showStatus("error", "Please enter a User ID first."); return; }
-
-  if (!PAYSTACK_KEY || PAYSTACK_KEY.includes("xxx")) {
-    showStatus("error", "Payment not configured. Set PAYSTACK_KEY in script.js.");
-    return;
   }
 
-  loading = "pay";
-  hideStatus();
-  render();
-
-  const popup = new PaystackPop();
-  popup.newTransaction({
-    key:      PAYSTACK_KEY,
-    email:    `${userId}@zeroswipe.app`,
-    amount:   165000,           // ₦1,650 ≈ $1
-    currency: "NGN",
-    ref:      `zeroswipe-${userId}-${Date.now()}`,
-    label:    "ZeroSwipe – $1 match fee",
-    onClose:  () => { showStatus("info", "Payment cancelled."); loading = null; render(); },
-    onSuccess: (response) => { notifyBackendPay(response.reference); },
-  });
-}
-
-// ── Create user ───────────────────────────────────────────────────────────────
-async function handleCreateUser() {
-  userId = $("user-id-input").value.trim();
-  if (!userId) { showStatus("error", "Please enter a User ID first."); return; }
-
-  loading = "create-user";
-  hideStatus();
-  render();
-
-  try {
-    await axios.post(`${API_BASE}/create-user`, { userId });
-    showStatus("success", "User created successfully.");
-  } catch {
-    showStatus("error", "Could not create user. Please try again.");
-  } finally {
-    loading = null;
-    render();
+  if (currentRequestType === "game") {
+    socket.emit("accept-game-date", {
+      matchId: currentMatchId
+    });
   }
-}
 
-// ── Status helpers ────────────────────────────────────────────────────────────
-function showStatus(type, message) {
-  const el    = $("status-banner");
-  const cls   = { success: "status-success", error: "status-error", info: "status-info" };
-  const icons = { success: "✓", error: "✕", info: "ℹ" };
-  el.className = `status-banner ${cls[type]}`;
-  el.innerHTML = `<span class="icon">${icons[type]}</span><span class="msg">${message}</span>`;
-}
+  if (currentRequestType === "schedule") {
+    socket.emit("accept-scheduled-date", {
+      matchId: currentMatchId,
+      dateTime: pendingScheduleTime
+    });
+  }
 
-function hideStatus() {
-  const el = $("status-banner");
-  el.className = "status-banner hidden";
-  el.innerHTML = "";
-}
+  requestBox.classList.add("hidden");
+};
 
-// ── Render ────────────────────────────────────────────────────────────────────
-function render() {
-  const isInCall = callState !== "idle" && callState !== "error";
+// Backend events
 
-  // Video section
-  $("video-section").classList.toggle("hidden", !isInCall);
+socket.on("connect", () => {
+  showStatus("Connected to Rindera backend.");
+});
 
-  // Call status text
-  const csEl = $("call-status");
-  if (callStatus) { csEl.textContent = callStatus; csEl.classList.remove("hidden"); }
-  else            { csEl.classList.add("hidden"); }
+socket.on("registered", (user) => {
+  showStatus(`Welcome, ${user.name}.`);
+  findMatchBtn.disabled = false;
+});
 
-  // Remote video opacity + spinner
-  $("remote-video").style.opacity = callState === "connected" ? "1" : "0";
-  $("remote-spinner").classList.toggle("hidden", callState === "connected");
+socket.on("waiting-for-match", () => {
+  showStatus("Waiting for another user...");
+});
 
-  // LIVE badge
-  $("live-badge").classList.toggle("hidden", callState !== "connected");
+socket.on("match-found", (match) => {
+  currentMatchId = match.matchId;
 
-  // User ID input
-  $("user-id-input").disabled = isInCall || isSearching;
+  matchTitle.innerText = "Match found";
+  matchActions.classList.remove("hidden");
 
-  // Get Match button vs searching indicator
-  $("get-match-btn").classList.toggle("hidden", isSearching);
-  $("searching-indicator").classList.toggle("hidden", !isSearching);
-  $("get-match-btn").disabled = loading !== null || isInCall;
+  showStatus("You have been matched.");
+});
 
-  // Other buttons
-  $("create-user-btn").disabled = loading !== null || isSearching;
-  $("unmatch-btn").disabled     = loading !== null || isSearching;
+socket.on("video-date-request", (data) => {
+  currentRequestType = "video";
+  currentMatchId = data.matchId;
 
-  // Pay button
-  $("pay-btn").classList.toggle("hidden", !payRequired);
-  $("pay-btn").disabled = loading !== null;
-}
+  requestText.innerText = "Your match wants to start a video date.";
+  requestBox.classList.remove("hidden");
+});
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", () => {
-  $("create-user-btn").addEventListener("click", handleCreateUser);
-  $("get-match-btn").addEventListener("click", handleGetMatch);
-  $("cancel-search-btn").addEventListener("click", handleCancelSearch);
-  $("end-call-btn").addEventListener("click", cleanup);
-  $("pay-btn").addEventListener("click", handlePay);
+socket.on("video-date-started", (data) => {
+  showStatus(`Video date started. Room: ${data.roomId}`);
+});
 
-  // Unmatch modal
-  $("unmatch-btn").addEventListener("click", () => $("unmatch-modal").classList.remove("hidden"));
-  $("modal-stay-btn").addEventListener("click", () => $("unmatch-modal").classList.add("hidden"));
-  $("modal-unmatch-btn").addEventListener("click", () => {
-    $("unmatch-modal").classList.add("hidden");
-    handleUnmatch();
-  });
-  $("unmatch-modal").addEventListener("click", (e) => {
-    if (e.target === $("unmatch-modal")) $("unmatch-modal").classList.add("hidden");
-  });
+socket.on("game-date-request", (data) => {
+  currentRequestType = "game";
+  currentMatchId = data.matchId;
 
-  // Stop modal box clicks bubbling to overlay
-  $("modal-box").addEventListener("click", (e) => e.stopPropagation());
+  requestText.innerText = "Your match wants to start a game date.";
+  requestBox.classList.remove("hidden");
+});
 
-  // Keep userId synced as user types
-  $("user-id-input").addEventListener("input", (e) => { userId = e.target.value; });
+socket.on("game-date-started", (data) => {
+  showStatus(`Game date started. Session: ${data.gameSessionId}`);
+});
 
-  render();
+socket.on("scheduled-date-request", (data) => {
+  currentRequestType = "schedule";
+  currentMatchId = data.matchId;
+  pendingScheduleTime = data.dateTime;
+
+  requestText.innerText = `Your match wants to schedule a date for ${data.dateTime}.`;
+  requestBox.classList.remove("hidden");
+});
+
+socket.on("scheduled-date-confirmed", (data) => {
+  showStatus(`Scheduled date confirmed: ${data.dateTime}`);
+});
+
+socket.on("error-message", (message) => {
+  showStatus(message);
 });
