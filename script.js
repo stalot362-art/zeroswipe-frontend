@@ -3,7 +3,10 @@ const SUPABASE_URL = "https://czmojquewgsrfafkjejy.supabase.co";
 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6bW9qcXVld2dzcmZhZmtqZWp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MzUyOTYsImV4cCI6MjA5NzMxMTI5Nn0.dMSTEQ84ns74_OpKxapw3mds4DCG2JUAmndV_cawO2Q";
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
 const socket = io(BACKEND_URL);
 
 let currentUserId = localStorage.getItem("rinderaUserId");
