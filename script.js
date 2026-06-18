@@ -1,12 +1,5 @@
 const BACKEND_URL = "https://rindera-backend.onrender.com";
-const SUPABASE_URL = "https://czmojquewgsrfafkjejy.supabase.co";
 
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6bW9qcXVld2dzcmZhZmtqZWp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MzUyOTYsImV4cCI6MjA5NzMxMTI5Nn0.dMSTEQ84ns74_OpKxapw3mds4DCG2JUAmndV_cawO2Q";
-
-const supabaseClient = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
 const socket = io(BACKEND_URL);
 
 let currentUserId = localStorage.getItem("rinderaUserId");
@@ -36,7 +29,8 @@ const statusBox = document.getElementById("status-box");
 function showStatus(message) {
   statusBox.innerText = message;
 }
-registerBtn.onclick = async () => {
+
+registerBtn.onclick = () => {
   const name = nameInput.value.trim();
 
   if (!name) {
@@ -53,29 +47,13 @@ registerBtn.onclick = async () => {
 
   localStorage.setItem("rinderaName", currentName);
 
-  const { error } = await supabaseClient
-    .from("users")
-    .upsert({
-      id: currentUserId,
-      name: currentName
-    });
-
-  if (error) {
-    showStatus("Could not save user.");
-    console.log(error);
-    return;
-  }
-
   socket.emit("register-user", {
     userId: currentUserId,
     name: currentName
   });
 
-  showStatus("User saved and connected.");
-};
-
-
-  showStatus("Connecting...");
+  findMatchBtn.disabled = false;
+  showStatus("User connected and saved on this device.");
 };
 
 findMatchBtn.onclick = () => {
@@ -143,8 +121,6 @@ acceptRequestBtn.onclick = () => {
 
   requestBox.classList.add("hidden");
 };
-
-// Backend events
 
 socket.on("connect", () => {
   showStatus("Connected to Rindera backend.");
