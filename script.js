@@ -4,7 +4,8 @@ const socket = io(BACKEND_URL);
 
 let currentUserId = localStorage.getItem("rinderaUserId");
 let currentName = localStorage.getItem("rinderaName");
-let currentMatchId = null;
+let currentMatchId = localStorage.getItem("rinderaMatchId");
+let currentStatus = localStorage.getItem("rinderaStatus") || "idle";
 let currentRequestType = null;
 let pendingScheduleTime = null;
 
@@ -131,12 +132,29 @@ socket.on("registered", (user) => {
   findMatchBtn.disabled = false;
 });
 
+socket.on("user-status-updated", (data) => {
+  currentStatus = data.status;
+  localStorage.setItem("rinderaStatus", currentStatus);
+
+  if (data.matchId) {
+    currentMatchId = data.matchId;
+    localStorage.setItem("rinderaMatchId", currentMatchId);
+  }
+});
+
 socket.on("waiting-for-match", () => {
+  currentStatus = "waiting";
+  localStorage.setItem("rinderaStatus", currentStatus);
+
   showStatus("Waiting for another user...");
 });
 
 socket.on("match-found", (match) => {
   currentMatchId = match.matchId;
+  currentStatus = "matched";
+
+  localStorage.setItem("rinderaMatchId", currentMatchId);
+  localStorage.setItem("rinderaStatus", currentStatus);
 
   matchTitle.innerText = "Match found";
   matchActions.classList.remove("hidden");
@@ -195,6 +213,14 @@ window.addEventListener("load", () => {
     });
 
     findMatchBtn.disabled = false;
-    showStatus("Welcome back, " + currentName + ".");
+
+    if (currentStatus === "waiting") {
+      showStatus("Waiting for another user...");
+    } else if (currentStatus === "matched" && currentMatchId) {
+      matchActions.classList.remove("hidden");
+      showStatus("You are still matched.");
+    } else {
+      showStatus("Welcome back, " + currentName + ".");
+    }
   }
 });
