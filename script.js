@@ -1,5 +1,4 @@
-const BACKEND_URL = "https://rindera-backend.onrender.com";
-
+const BACKEND_URL = "https://zeroswipe-backend.onrender.com";
 const socket = io(BACKEND_URL);
 
 let currentUserId = localStorage.getItem("rinderaUserId");
