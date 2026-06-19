@@ -49,14 +49,13 @@ function renderMatchHistory(matches) {
   matchHistoryList.innerHTML = "";
 
   matches.forEach((match) => {
-    const otherUserId =
-      match.user1_id === currentUserId ? match.user2_id : match.user1_id;
+    const partnerName = match.partner_name || match.partner_id || "Unknown match";
 
     const item = document.createElement("div");
     item.className = "history-item";
 
     item.innerHTML = `
-      <p><strong>Match:</strong> ${otherUserId}</p>
+      <p><strong>Match:</strong> ${partnerName}</p>
       <p><strong>Status:</strong> ${match.status}</p>
       <button data-match-id="${match.id}" class="history-video-btn">Video Date</button>
       <button data-match-id="${match.id}" class="history-game-btn">Game Date</button>
@@ -71,6 +70,7 @@ function renderMatchHistory(matches) {
       currentMatchId = btn.dataset.matchId;
       localStorage.setItem("rinderaMatchId", currentMatchId);
 
+      matchTitle.innerText = "Match found";
       matchActions.classList.remove("hidden");
       showStatus("Selected previous match.");
     };
