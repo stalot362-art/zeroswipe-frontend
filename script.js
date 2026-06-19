@@ -1,4 +1,5 @@
 const BACKEND_URL = "https://zeroswipe-backend.onrender.com";
+
 const socket = io(BACKEND_URL);
 
 let currentUserId = localStorage.getItem("rinderaUserId");
@@ -20,6 +21,9 @@ const gameDateBtn = document.getElementById("game-date-btn");
 const scheduleInput = document.getElementById("schedule-input");
 const scheduleDateBtn = document.getElementById("schedule-date-btn");
 
+const matchHistory = document.getElementById("match-history");
+const matchHistoryList = document.getElementById("match-history-list");
+
 const requestBox = document.getElementById("request-box");
 const requestText = document.getElementById("request-text");
 const acceptRequestBtn = document.getElementById("accept-request-btn");
@@ -28,6 +32,77 @@ const statusBox = document.getElementById("status-box");
 
 function showStatus(message) {
   statusBox.innerText = message;
+}
+
+function saveUser(user) {
+  currentUserId = user.userId;
+  localStorage.setItem("rinderaUserId", currentUserId);
+}
+
+function renderMatchHistory(matches) {
+  if (!matches || matches.length === 0) {
+    matchHistory.classList.add("hidden");
+    return;
+  }
+
+  matchHistory.classList.remove("hidden");
+  matchHistoryList.innerHTML = "";
+
+  matches.forEach((match) => {
+    const otherUserId =
+      match.user1_id === currentUserId ? match.user2_id : match.user1_id;
+
+    const item = document.createElement("div");
+    item.className = "history-item";
+
+    item.innerHTML = `
+      <p><strong>Match:</strong> ${otherUserId}</p>
+      <p><strong>Status:</strong> ${match.status}</p>
+      <button data-match-id="${match.id}" class="history-video-btn">Video Date</button>
+      <button data-match-id="${match.id}" class="history-game-btn">Game Date</button>
+      <button data-match-id="${match.id}" class="history-select-btn">Use This Match</button>
+    `;
+
+    matchHistoryList.appendChild(item);
+  });
+
+  document.querySelectorAll(".history-select-btn").forEach((btn) => {
+    btn.onclick = () => {
+      currentMatchId = btn.dataset.matchId;
+      localStorage.setItem("rinderaMatchId", currentMatchId);
+
+      matchActions.classList.remove("hidden");
+      showStatus("Selected previous match.");
+    };
+  });
+
+  document.querySelectorAll(".history-video-btn").forEach((btn) => {
+    btn.onclick = () => {
+      currentMatchId = btn.dataset.matchId;
+      localStorage.setItem("rinderaMatchId", currentMatchId);
+
+      socket.emit("request-video-date", {
+        matchId: currentMatchId,
+        fromUserId: currentUserId
+      });
+
+      showStatus("Video date request sent.");
+    };
+  });
+
+  document.querySelectorAll(".history-game-btn").forEach((btn) => {
+    btn.onclick = () => {
+      currentMatchId = btn.dataset.matchId;
+      localStorage.setItem("rinderaMatchId", currentMatchId);
+
+      socket.emit("request-game-date", {
+        matchId: currentMatchId,
+        fromUserId: currentUserId
+      });
+
+      showStatus("Game date request sent.");
+    };
+  });
 }
 
 registerBtn.onclick = () => {
@@ -39,11 +114,6 @@ registerBtn.onclick = () => {
   }
 
   currentName = name;
-
-  if (!currentUserId) {
-  currentUserId = null;
-}
-
   localStorage.setItem("rinderaName", currentName);
 
   socket.emit("register-user", {
@@ -52,7 +122,7 @@ registerBtn.onclick = () => {
   });
 
   findMatchBtn.disabled = false;
-  showStatus("User connected and saved on this device.");
+  showStatus("Entering Rindera...");
 };
 
 findMatchBtn.onclick = () => {
@@ -128,20 +198,27 @@ socket.on("connect", () => {
 });
 
 socket.on("registered", (user) => {
-  currentUserId = user.userId;
-  localStorage.setItem("rinderaUserId", currentUserId);
+  saveUser(user);
 
   findMatchBtn.disabled = false;
 
-  if (currentStatus === "waiting") {
-    showStatus("Waiting for another user...");
-  } else if (currentStatus === "matched" && currentMatchId) {
+  if (user.status === "matched" && user.currentMatchId) {
+    currentStatus = "matched";
+    currentMatchId = user.currentMatchId;
+
+    localStorage.setItem("rinderaStatus", currentStatus);
+    localStorage.setItem("rinderaMatchId", currentMatchId);
+
     matchTitle.innerText = "Match found";
     matchActions.classList.remove("hidden");
     showStatus("You are still matched.");
   } else {
     showStatus(`Welcome, ${user.name}.`);
   }
+});
+
+socket.on("match-history", (data) => {
+  renderMatchHistory(data.matches);
 });
 
 socket.on("user-status-updated", (data) => {
