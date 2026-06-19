@@ -59,6 +59,7 @@ function renderMatchHistory(matches) {
       <p><strong>Status:</strong> ${match.status}</p>
       <button data-match-id="${match.id}" class="history-video-btn">Video Date</button>
       <button data-match-id="${match.id}" class="history-game-btn">Game Date</button>
+      <button data-match-id="${match.id}" class="history-schedule-btn">Schedule Date</button>
       <button data-match-id="${match.id}" class="history-select-btn">Use This Match</button>
     `;
 
@@ -103,6 +104,18 @@ function renderMatchHistory(matches) {
       showStatus("Game date request sent.");
     };
   });
+
+  document.querySelectorAll(".history-schedule-btn").forEach((btn) => {
+  btn.onclick = () => {
+    currentMatchId = btn.dataset.matchId;
+    localStorage.setItem("rinderaMatchId", currentMatchId);
+
+    matchTitle.innerText = "Match found";
+    matchActions.classList.remove("hidden");
+
+    showStatus("Selected previous match. Choose a date and tap Schedule Date.");
+  };
+});
 }
 
 registerBtn.onclick = () => {
