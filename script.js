@@ -41,9 +41,8 @@ registerBtn.onclick = () => {
   currentName = name;
 
   if (!currentUserId) {
-    currentUserId = "user_" + Date.now();
-    localStorage.setItem("rinderaUserId", currentUserId);
-  }
+  currentUserId = null;
+}
 
   localStorage.setItem("rinderaName", currentName);
 
@@ -129,6 +128,9 @@ socket.on("connect", () => {
 });
 
 socket.on("registered", (user) => {
+  currentUserId = user.userId;
+  localStorage.setItem("rinderaUserId", currentUserId);
+
   findMatchBtn.disabled = false;
 
   if (currentStatus === "waiting") {
