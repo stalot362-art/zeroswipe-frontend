@@ -61,7 +61,7 @@ function renderMatchHistory(matches) {
       <button data-match-id="${match.id}" class="history-game-btn">Game Date</button>
       <button data-match-id="${match.id}" class="history-schedule-btn">Schedule Date</button>
       <button data-match-id="${match.id}" class="history-select-btn">Use This Match</button>
-    `;
+    ;
 
     matchHistoryList.appendChild(item);
   });
