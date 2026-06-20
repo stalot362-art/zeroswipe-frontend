@@ -39,6 +39,12 @@ function saveUser(user) {
   localStorage.setItem("rinderaUserId", currentUserId);
 }
 
+function showCurrentMatch(message) {
+  matchTitle.innerText = "Match found";
+  matchActions.classList.remove("hidden");
+  showStatus(message);
+}
+
 function renderMatchHistory(matches) {
   if (!matches || matches.length === 0) {
     matchHistory.classList.add("hidden");
@@ -58,8 +64,9 @@ function renderMatchHistory(matches) {
       <p><strong>Match:</strong> ${partnerName}</p>
       <p><strong>Status:</strong> ${match.status}</p>
       <button data-match-id="${match.id}" class="history-video-btn">Video Date</button>
-<button data-match-id="${match.id}" class="history-game-btn">Game Date</button>
-<button data-match-id="${match.id}" class="history-select-btn">Use This Match</button>
+      <button data-match-id="${match.id}" class="history-game-btn">Game Date</button>
+      <button data-match-id="${match.id}" class="history-schedule-btn">Schedule Date</button>
+      <button data-match-id="${match.id}" class="history-select-btn">Use This Match</button>
     `;
 
     matchHistoryList.appendChild(item);
@@ -68,18 +75,22 @@ function renderMatchHistory(matches) {
   document.querySelectorAll(".history-select-btn").forEach((btn) => {
     btn.onclick = () => {
       currentMatchId = btn.dataset.matchId;
-      localStorage.setItem("rinderaMatchId", currentMatchId);
+      currentStatus = "matched";
 
-      matchTitle.innerText = "Match found";
-      matchActions.classList.remove("hidden");
-      showStatus("Selected previous match.");
+      localStorage.setItem("rinderaMatchId", currentMatchId);
+      localStorage.setItem("rinderaStatus", currentStatus);
+
+      showCurrentMatch("Selected previous match.");
     };
   });
 
   document.querySelectorAll(".history-video-btn").forEach((btn) => {
     btn.onclick = () => {
       currentMatchId = btn.dataset.matchId;
+      currentStatus = "matched";
+
       localStorage.setItem("rinderaMatchId", currentMatchId);
+      localStorage.setItem("rinderaStatus", currentStatus);
 
       socket.emit("request-video-date", {
         matchId: currentMatchId,
@@ -93,7 +104,10 @@ function renderMatchHistory(matches) {
   document.querySelectorAll(".history-game-btn").forEach((btn) => {
     btn.onclick = () => {
       currentMatchId = btn.dataset.matchId;
+      currentStatus = "matched";
+
       localStorage.setItem("rinderaMatchId", currentMatchId);
+      localStorage.setItem("rinderaStatus", currentStatus);
 
       socket.emit("request-game-date", {
         matchId: currentMatchId,
@@ -104,7 +118,17 @@ function renderMatchHistory(matches) {
     };
   });
 
-  
+  document.querySelectorAll(".history-schedule-btn").forEach((btn) => {
+    btn.onclick = () => {
+      currentMatchId = btn.dataset.matchId;
+      currentStatus = "matched";
+
+      localStorage.setItem("rinderaMatchId", currentMatchId);
+      localStorage.setItem("rinderaStatus", currentStatus);
+
+      showCurrentMatch("Selected previous match. Choose a date and tap Schedule Date.");
+    };
+  });
 }
 
 registerBtn.onclick = () => {
@@ -136,6 +160,11 @@ findMatchBtn.onclick = () => {
 };
 
 videoDateBtn.onclick = () => {
+  if (!currentMatchId) {
+    showStatus("No match selected.");
+    return;
+  }
+
   socket.emit("request-video-date", {
     matchId: currentMatchId,
     fromUserId: currentUserId
@@ -145,6 +174,11 @@ videoDateBtn.onclick = () => {
 };
 
 gameDateBtn.onclick = () => {
+  if (!currentMatchId) {
+    showStatus("No match selected.");
+    return;
+  }
+
   socket.emit("request-game-date", {
     matchId: currentMatchId,
     fromUserId: currentUserId
@@ -155,6 +189,11 @@ gameDateBtn.onclick = () => {
 
 scheduleDateBtn.onclick = () => {
   const dateTime = scheduleInput.value;
+
+  if (!currentMatchId) {
+    showStatus("No match selected.");
+    return;
+  }
 
   if (!dateTime) {
     showStatus("Choose a date and time first.");
@@ -211,9 +250,7 @@ socket.on("registered", (user) => {
     localStorage.setItem("rinderaStatus", currentStatus);
     localStorage.setItem("rinderaMatchId", currentMatchId);
 
-    matchTitle.innerText = "Match found";
-    matchActions.classList.remove("hidden");
-    showStatus("You are still matched.");
+    showCurrentMatch("You are still matched.");
   } else {
     showStatus(`Welcome, ${user.name}.`);
   }
@@ -251,15 +288,16 @@ socket.on("match-found", (match) => {
   localStorage.setItem("rinderaMatchId", currentMatchId);
   localStorage.setItem("rinderaStatus", currentStatus);
 
-  matchTitle.innerText = "Match found";
-  matchActions.classList.remove("hidden");
-
-  showStatus("You have been matched.");
+  showCurrentMatch("You have been matched.");
 });
 
 socket.on("video-date-request", (data) => {
   currentRequestType = "video";
   currentMatchId = data.matchId;
+  currentStatus = "matched";
+
+  localStorage.setItem("rinderaMatchId", currentMatchId);
+  localStorage.setItem("rinderaStatus", currentStatus);
 
   requestText.innerText = "Your match wants to start a video date.";
   requestBox.classList.remove("hidden");
@@ -272,6 +310,10 @@ socket.on("video-date-started", (data) => {
 socket.on("game-date-request", (data) => {
   currentRequestType = "game";
   currentMatchId = data.matchId;
+  currentStatus = "matched";
+
+  localStorage.setItem("rinderaMatchId", currentMatchId);
+  localStorage.setItem("rinderaStatus", currentStatus);
 
   requestText.innerText = "Your match wants to start a game date.";
   requestBox.classList.remove("hidden");
@@ -285,6 +327,10 @@ socket.on("scheduled-date-request", (data) => {
   currentRequestType = "schedule";
   currentMatchId = data.matchId;
   pendingScheduleTime = data.dateTime;
+  currentStatus = "matched";
+
+  localStorage.setItem("rinderaMatchId", currentMatchId);
+  localStorage.setItem("rinderaStatus", currentStatus);
 
   requestText.innerText = `Your match wants to schedule a date for ${data.dateTime}.`;
   requestBox.classList.remove("hidden");
@@ -312,9 +358,7 @@ window.addEventListener("load", () => {
     if (currentStatus === "waiting") {
       showStatus("Waiting for another user...");
     } else if (currentStatus === "matched" && currentMatchId) {
-      matchTitle.innerText = "Match found";
-      matchActions.classList.remove("hidden");
-      showStatus("You are still matched.");
+      showCurrentMatch("You are still matched.");
     } else {
       showStatus("Welcome back, " + currentName + ".");
     }
